@@ -17,9 +17,23 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
     private void OnEnable()
     {
         if (PlayerPrefs.HasKey(RefilledBoxCount))
-            m_Text.text = string.Format("Free({0}/{1})", BoxMaxCount - PlayerPrefs.GetInt(RefilledBoxCount), BoxMaxCount);
-        else
+        {
+            int num = PlayerPrefs.GetInt(RefilledBoxCount);
+            m_Text.text = string.Format("Free({0}/{1})", BoxMaxCount - num, BoxMaxCount);
+            hasCooldownKey = true;
+            if (BoxMaxCount == num)
+                allBoxReceived = true;
+            else
+                allBoxReceived = false;
+            lastBoxReceived = DateTime.Parse(PlayerPrefs.GetString(CooldownKey)).ToUniversalTime();
+        }
+            else
+        {
             m_Text.text = string.Format("Free({0}/{0})", BoxMaxCount);
+            hasCooldownKey = false;
+            allBoxReceived = false;
+            //lastBoxReceived;
+        }
     }
 
     public void OnPointerClick(PointerEventData eventData)
@@ -60,11 +74,15 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
             {
                 PlayerPrefs.SetInt(RefilledBoxCount, 1); // 현재 쿨타임 기다리는 박스 1개 추가
                 PlayerPrefs.SetString(CooldownKey, now.ToString("o"));
+                hasCooldownKey = true;
+                lastBoxReceived = now;
                 m_Text.text = string.Format("FREE({0}/{1})", BoxMaxCount - 1, BoxMaxCount);
             }
             else
             {
                 int usedBoxCount = PlayerPrefs.GetInt(RefilledBoxCount) + 1;
+                if (usedBoxCount == BoxMaxCount)
+                    allBoxReceived = true;
                 PlayerPrefs.SetInt(RefilledBoxCount, usedBoxCount);
                 m_Text.text = string.Format("FREE({0}/{1})", BoxMaxCount - usedBoxCount, BoxMaxCount);
             }
@@ -78,23 +96,20 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
 
     TimeSpan remain;
     float deltaTime = 0f;
-    private void Update() // 시간초 변경을 너무 자주 체크할 필요는 없어 Coroutine 등을 활용해도 되나 게임이 무겁지 않기에 일단 유지
+    DateTime lastBoxReceived;
+    bool hasCooldownKey; // 현재 쿨타임 관련 작업이 필요함을 표시
+    bool allBoxReceived; // 모든 박스(Test 기준 3개)가 쿨타임이 돌고 있는지
+
+    private void Update()
     {
-        deltaTime += Time.unscaledDeltaTime;
-
-        if (deltaTime < 0.2f)
-            return;
-        else
-            deltaTime = 0f;
-
-        if (!PlayerPrefs.HasKey(CooldownKey))
+        if (!hasCooldownKey)
             return;
 
         // Timer 테스트 원하시면 시간초로 변경해서 체크하면 됩니다.
-        //remain = DateTime.Parse(PlayerPrefs.GetString(CooldownKey)).ToUniversalTime().AddSeconds(원하는 초) - DateTime.UtcNow;
-        remain = DateTime.Parse(PlayerPrefs.GetString(CooldownKey)).ToUniversalTime().AddHours(cooldownDuration.Hours) - DateTime.UtcNow;
+        //remain = lastBoxReceived.AddSeconds(cooldownDuration.Hours * 6) - DateTime.UtcNow;
+        remain = lastBoxReceived.AddHours(cooldownDuration.Hours) - DateTime.UtcNow;
 
-        if (PlayerPrefs.HasKey(RefilledBoxCount) && PlayerPrefs.GetInt(RefilledBoxCount) == BoxMaxCount)
+        if (allBoxReceived)
         {
             string formatted = string.Format("{0:D2}:{1:D2}:{2:D2}", (int)remain.Hours, (int)remain.Minutes, (int)remain.Seconds);
             m_Text.text = formatted;
@@ -111,6 +126,7 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
     void SetADButtonText()
     {
         int count = PlayerPrefs.GetInt(RefilledBoxCount) - 1; // 쿨타임으로 채워야 할 박스 갯수 감소 (박스가 채워졌다는 의미)
+        allBoxReceived = false;
         PlayerPrefs.SetInt(RefilledBoxCount, count);
         if (count >= 0 && count < BoxMaxCount)
         {
@@ -121,11 +137,13 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
         {
             PlayerPrefs.DeleteKey(RefilledBoxCount);
             PlayerPrefs.DeleteKey(CooldownKey);
+            hasCooldownKey = false;
         }
         else
         {
             DateTime now = DateTime.UtcNow;
             PlayerPrefs.SetString(CooldownKey, now.ToString("o")); // 기존 시간은 쿨타임이 지나서 채워졌으니 지금 시간으로 변경
+            lastBoxReceived = now;
         }
 
         PlayerPrefs.Save();
@@ -148,6 +166,8 @@ public class WeaponLobbyFreeCrate : MonoBehaviour, IPointerClickHandler
     {
         PlayerPrefs.DeleteKey(RefilledBoxCount);
         PlayerPrefs.DeleteKey(CooldownKey);
+        hasCooldownKey = false;
+        allBoxReceived = false;
         m_Text.text = string.Format("FREE({0}/{0})", BoxMaxCount);
         PlayerPrefs.Save();
     }
